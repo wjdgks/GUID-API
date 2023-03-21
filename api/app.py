@@ -14,7 +14,7 @@ cache = redis.Redis(host='localhost', port=6379)
 
 guid_db = mysql.connector.connect(
     host='localhost',
-    user='----',
+    user='root',
     password='-----',
     database='guids',
 )
@@ -35,7 +35,7 @@ class GUID:
     def return_json(self):
 
         return json.dumps({"guid": self._id,
-                "expire": self._expire,
+                "expire": str(self._expire),
                 "user": self._user})
 
 class GUIDHandle(RequestHandler):
@@ -47,6 +47,9 @@ class GUIDHandle(RequestHandler):
         in a json format. It first searches through the cache layer to find the requested
         guid and then the MySQL database. If it cannot find the GUID, it will raise a 404 error.
         '''
+
+        if (id == None):
+            raise tornado.web.HTTPError(400, 'GUID Missing')
 
         # First check if guid is in cache
         cached = cache.get(id)
@@ -63,7 +66,11 @@ class GUIDHandle(RequestHandler):
             row = cursor.fetchone()
 
             if row is not None:
+                
+                row[1] = str(row[1])
+
                 found = json.dumps(row)
+
                 cache.set(id, found)
 
 
@@ -112,6 +119,7 @@ class GUIDHandle(RequestHandler):
 
 
         # Insert into db
+
 
         cursor.execute("INSERT INTO guids VALUES (%s, %s, %s) ON DUPLICATE KEY UPDATE expire=%s, user=%s",
                        (id, expire, user, expire, user))
