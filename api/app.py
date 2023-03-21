@@ -7,6 +7,7 @@ import uuid
 import time
 import redis
 import mysql.connector
+import re
 
 
 cache = redis.Redis(host='localhost', port=6379)
@@ -40,6 +41,13 @@ class GUID:
 class GUIDHandle(RequestHandler):
     def get(self, id):
 
+        '''
+        The get function handles the GET requests for the application.
+        It takes a guid argument and tries to find the guid and returns the information
+        in a json format. It first searches through the cache layer to find the requested
+        guid and then the MySQL database. If it cannot find the GUID, it will raise a 404 error.
+        '''
+
         # First check if guid is in cache
         cached = cache.get(id)
 
@@ -65,22 +73,48 @@ class GUIDHandle(RequestHandler):
         self.write(found)
         
     def post(self, id=None):
-        
+
+        '''
+        The post function will take POST requested used to update/create GUIDS for the database
+        The function takes in an optional ID parameters and a json input
+        and returns the newly created or updated GUID as a json
+        '''
+
         if id == None:
             id = str(uuid.uuid4()).replace('-', '').upper()
         
         input = json.loads(self.request.body)
-        user = input['user']
+
+        if 'user' in input:
+
+            user = input['user']
+        else:
+            user = None
 
         if ('expire' in input):
             expire = int(input['expire'])        
-
         else:            
             expire = int(time.time() + 30*24*3600)
 
         # Insert into db
 
+
+
         cursor = guid_db.cursor()
+        cursor.execute("SELECT * FROM guids WHERE guid=%s", (id,))
+        row = cursor.fetchone()
+
+        if row is not None:
+            if 'user' not in input:
+                user = row[2]
+            
+            if 'expire' not in input:
+                expire = row[1]
+
+
+
+
+
         cursor.execute("INSERT INTO guids VALUES (%s, %s, %s) ON DUPLICATE KEY UPDATE expire=%s, user=%s",
                        (id, expire, user, expire, user))
         guid_db.commit()
@@ -93,12 +127,22 @@ class GUIDHandle(RequestHandler):
         self.write(guid)
 
     def delete(self, id):
-        
+        '''
+        The delete function will handle all DELETE requests used to delete GUIDs from the database
+        It will take in a GUID parameter and then find the specified GUID and then delete it from the database
+        '''
+        # Check if requested GUID exists within the database
         cursor = guid_db.cursor()
+        cursor.execute("SELECT * FROM guids WHERE guid=%s", (id,))
+        row = cursor.fetchone()
+        if (row is None):
+            raise tornado.web.HTTPError(404, 'GUID Not Found')
+
         cursor.execute("DELETE FROM guids WHERE guid=%s", (id,))
         guid_db.commit()
 
-        cache.delete(id)
+        if (cache.get(id) != None):
+            cache.delete(id)
 
         self.set_status(204)
 
