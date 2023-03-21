@@ -14,8 +14,8 @@ cache = redis.Redis(host='localhost', port=6379)
 
 guid_db = mysql.connector.connect(
     host='localhost',
-    user='root',
-    password='wjdgks08',
+    user='----',
+    password='-----',
     database='guids',
 )
 
@@ -96,9 +96,8 @@ class GUIDHandle(RequestHandler):
         else:            
             expire = int(time.time() + 30*24*3600)
 
-        # Insert into db
 
-
+        # Check if in db
 
         cursor = guid_db.cursor()
         cursor.execute("SELECT * FROM guids WHERE guid=%s", (id,))
@@ -112,8 +111,7 @@ class GUIDHandle(RequestHandler):
                 expire = row[1]
 
 
-
-
+        # Insert into db
 
         cursor.execute("INSERT INTO guids VALUES (%s, %s, %s) ON DUPLICATE KEY UPDATE expire=%s, user=%s",
                        (id, expire, user, expire, user))
